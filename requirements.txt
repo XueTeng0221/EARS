@@ -11,5 +11,5 @@ pandas
 scikit-learn
 torchaudio
 scipy
-huggingface-hub
 tensorboard
+openai

@@ -7,4 +7,6 @@ __pycache__/
 .vscode/
 *.log
 data/
-batch_001.tar.gz?download=true*
+*.zip
+*.mp3
+*.wav
