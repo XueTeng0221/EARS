@@ -1,0 +1,15 @@
+transformers
+accelerate
+datasets
+librosa
+chromadb
+openai-whisper
+termcolor
+matplotlib
+numpy
+pandas
+scikit-learn
+torchaudio
+scipy
+huggingface-hub
+tensorboard
