@@ -1,7 +1,7 @@
 # pipeline.py
 
 from termcolor import colored
-from .models import QueryPlanner, MultiScaleRetriever, EvidenceReranker, Verifier, generate_final_answer
+from models import QueryPlanner, MultiScaleRetriever, EvidenceReranker, Verifier, generate_final_answer
 
 class EARSPipeline:
     def __init__(self, dataset):
