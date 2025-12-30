@@ -7,6 +7,7 @@ import torch
 import numpy as np
 from dataclasses import dataclass, field
 from typing import List, Dict, Tuple
+from tqdm import tqdm
 from transformers import ClapModel, ClapProcessor, pipeline
 
 @dataclass
@@ -69,7 +70,7 @@ class AudioProcessor:
                 tags.append(self.clap_labels[idx])
         return tags
 
-    def _summarize_text(self, text: str, max_text_length: Tuple[int, int] = (1024, 200), length_range: Tuple[int, int] = (360, 7200)) -> str:
+    def _summarize_text(self, text: str, max_text_length: Tuple[int, int], length_range: Tuple[int, int]) -> str:
         """
         对长文本进行摘要
         注意：议会开头有 pledge of allegiance 等仪式环节，截断前几分钟
@@ -77,7 +78,8 @@ class AudioProcessor:
         if len(text.split()) < 30: # 太短不摘要
             return text
         
-        assert max_text_length[0] > length_range[1], "Max text length must be greater than summary max length."
+        assert max_text_length[0] > max_text_length[1], "max_text_length input must be greater than output"
+        assert length_range[1] > length_range[0], "length_range max must be greater than min"
         try:
             input_text = text[:max_text_length[0]] 
             summary = self.summarizer(input_text, max_length=length_range[1], min_length=length_range[0], do_sample=False)
@@ -86,8 +88,8 @@ class AudioProcessor:
             print(f"Summarization error: {e}")
             return text[:max_text_length[1]] + "..."
 
-    def process_audio(self, audio_path: str, chunk_len_l1: int = 60, sample_rate: int = 48000,
-                      max_text_length: Tuple[int, int] = (1024, 200), length_range: Tuple[int, int] = (360, 7200)) -> Dict[str, List[EvidenceUnit]]:
+    def process_audio(self, audio_path: str, chunk_len_l1: int = 300, sample_rate: int = 48000,
+                      max_text_length: Tuple[int, int] = (1024, 200), length_range: Tuple[int, int] = (36, 120)) -> Dict[str, List[EvidenceUnit]]:
         """
         全流程处理：加载 -> ASR -> 切片 -> CLAP特征 -> L2构建 -> L1聚合 -> 摘要
         Parameters:
@@ -135,7 +137,8 @@ class AudioProcessor:
         # 4. 构建 L1 (粗粒度) - 基于时间窗口聚合 L2
         print(f"  - Aggregating L1 context windows...")
         num_windows = int(np.ceil(duration / chunk_len_l1))
-        for i in range(num_windows):
+        bar = tqdm(range(num_windows), desc="L1 Windows", ncols=80)
+        for i in bar:
             w_start = i * chunk_len_l1
             w_end = min((i + 1) * chunk_len_l1, duration)
             

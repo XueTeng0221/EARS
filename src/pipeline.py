@@ -12,10 +12,7 @@ class EARSPipeline:
         
     def run(self, user_query: str, max_retries=2):
         print(colored(f"User Query: {user_query}", 'blue'))
-        
-        history = []
         current_query = user_query
-        
         for attempt in range(max_retries + 1):
             print(f"\n--- Attempt {attempt+1} ---")
             

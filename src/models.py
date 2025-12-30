@@ -17,7 +17,7 @@ class LocalLLM:
     _instance = None
     
     @classmethod
-    def get_instance(cls, model_path="Qwen/Qwen2.5-7B-Instruct"):
+    def get_instance(cls, model_path="./local-qwen"):
         if cls._instance is None:
             print(f"Loading Local LLM: {model_path} ...")
             cls._instance = cls(model_path)
@@ -30,7 +30,7 @@ class LocalLLM:
             model_path, 
             device_map="auto", 
             trust_remote_code=True,
-            torch_dtype=torch.float16 if self.device == "cuda" else torch.float32
+            dtype=torch.float16 if self.device == "cuda" else torch.float32
         )
         self.model.eval()
 
