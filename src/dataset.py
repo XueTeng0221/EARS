@@ -69,8 +69,11 @@ class AudioProcessor:
                 tags.append(self.clap_labels[idx])
         return tags
 
-    def _summarize_text(self, text: str, max_text_length: Tuple[int, int] = (1024, 200), length_range: Tuple[int, int] = (10, 60)) -> str:
-        """对长文本进行摘要"""
+    def _summarize_text(self, text: str, max_text_length: Tuple[int, int] = (1024, 200), length_range: Tuple[int, int] = (360, 7200)) -> str:
+        """
+        对长文本进行摘要
+        注意：议会开头有 pledge of allegiance 等仪式环节，截断前几分钟
+        """
         if len(text.split()) < 30: # 太短不摘要
             return text
         
