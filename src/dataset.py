@@ -86,9 +86,18 @@ class AudioProcessor:
             print(f"Summarization error: {e}")
             return text[:max_text_length[1]] + "..."
 
-    def process_audio(self, audio_path: str, chunk_len_l1: int = 60, sample_rate: int = 48000) -> Dict[str, List[EvidenceUnit]]:
+    def process_audio(self, audio_path: str, chunk_len_l1: int = 60, sample_rate: int = 48000,
+                      max_text_length: Tuple[int, int] = (1024, 200), length_range: Tuple[int, int] = (360, 7200)) -> Dict[str, List[EvidenceUnit]]:
         """
         全流程处理：加载 -> ASR -> 切片 -> CLAP特征 -> L2构建 -> L1聚合 -> 摘要
+        Parameters:
+            audio_path: 音频文件路径
+            chunk_len_l1: L1 聚合的时间窗口长度（秒）
+            sample_rate: 加载音频的采样率
+            max_text_length: 摘要前的最大文本长度截断 (input_max, output_max)
+            length_range: 摘要生成的长度范围 (min_length, max_length)
+        Returns:
+            Dict 包含 L1 和 L2 级别的 EvidenceUnit 列表
         """
         # 1. 加载完整音频
         # Whisper 内部会重采样到 16k，但 CLAP 最好用 48k。
@@ -147,7 +156,7 @@ class AudioProcessor:
             unique_tags = list(set(all_tags)) # 简单去重
             
             # 生成摘要
-            summary_text = self._summarize_text(full_text)
+            summary_text = self._summarize_text(full_text, max_text_length, length_range)
             l1_units.append(EvidenceUnit(
                 audio_id=os.path.basename(audio_path),
                 start_time=w_start,
@@ -178,13 +187,13 @@ if __name__ == "__main__":
         if result['L2']:
             print("\n--- Sample L2 Unit (Fine-grained) ---")
             u = result['L2'][0]
-            print(f"Time: {u.start_time:.1f}-{u.end_time:.1f}s")
+            print(f"Time: {u.start_time:.1f} - {u.end_time:.1f}s")
             print(f"Text: {u.transcript}")
             print(f"Tags: {u.audio_tags}")
             
         if result['L1']:
             print("\n--- Sample L1 Unit (Coarse Summary) ---")
             u = result['L1'][0]
-            print(f"Time: {u.start_time:.1f}-{u.end_time:.1f}s")
+            print(f"Time: {u.start_time:.1f} - {u.end_time:.1f}s")
             print(f"Summary: {u.transcript}")
             print(f"Aggregated Tags: {u.audio_tags}")
