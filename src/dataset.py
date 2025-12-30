@@ -47,7 +47,7 @@ class AudioProcessor:
         
         self.summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6", device=0 if device=="cuda" else -1)
 
-    def _get_clap_tags(self, audio_fragment: np.ndarray, sr: int) -> List[str]:
+    def _get_clap_tags(self, audio_fragment: np.ndarray, sr: int, k: int = 2) -> List[str]:
         """
         对音频片段进行 Zero-shot 分类
         """
@@ -62,8 +62,8 @@ class AudioProcessor:
             # 计算相似度: (1, D) @ (N_labels, D).T = (1, N_labels)
             similarity = (audio_embeds @ self.label_embeddings.T).softmax(dim=-1)
             
-        # 获取 Top-2 标签
-        scores, indices = similarity[0].topk(2)
+        # 获取 Top-k 标签
+        scores, indices = similarity[0].topk(k)
         tags = []
         for score, idx in zip(scores, indices):
             if score > 0.3: # 阈值过滤
@@ -88,8 +88,8 @@ class AudioProcessor:
             print(f"Summarization error: {e}")
             return text[:max_text_length[1]] + "..."
 
-    def process_audio(self, audio_path: str, chunk_len_l1: int = 300, sample_rate: int = 48000,
-                      max_text_length: Tuple[int, int] = (1024, 200), length_range: Tuple[int, int] = (36, 120)) -> Dict[str, List[EvidenceUnit]]:
+    def process_audio(self, audio_path: str, chunk_len_l1: int = 45, sample_rate: int = 48000,
+                      max_text_length: Tuple[int, int] = (1024, 200), length_range: Tuple[int, int] = (18, 36)) -> Dict[str, List[EvidenceUnit]]:
         """
         全流程处理：加载 -> ASR -> 切片 -> CLAP特征 -> L2构建 -> L1聚合 -> 摘要
         Parameters:
@@ -117,7 +117,8 @@ class AudioProcessor:
         
         # 3. 构建 L2 (细粒度) 并提取 CLAP 特征
         print(f"  - Extracting CLAP features for {len(segments)} segments...")
-        for seg in segments:
+        bar_seg = tqdm(segments, desc="L2 Segments", ncols=80)
+        for seg in bar_seg:
             start_sec, end_sec = seg['start'], seg['end']
             start_sample = int(start_sec * sr)
             end_sample = int(end_sec * sr)
@@ -133,14 +134,16 @@ class AudioProcessor:
                 audio_tags=tags,
                 confidence=np.exp(seg.get('avg_logprob', -1.0)) # Whisper logprob 转概率近似
             ))
+            
+            bar_seg.set_postfix({"start_sec": f"{start_sec:.1f}", "end_sec": f"{end_sec:.1f}", "tags": ",".join(tags)})
 
         # 4. 构建 L1 (粗粒度) - 基于时间窗口聚合 L2
         print(f"  - Aggregating L1 context windows...")
         num_windows = int(np.ceil(duration / chunk_len_l1))
-        bar = tqdm(range(num_windows), desc="L1 Windows", ncols=80)
-        for i in bar:
-            w_start = i * chunk_len_l1
-            w_end = min((i + 1) * chunk_len_l1, duration)
+        bar_wnd = tqdm(range(num_windows), desc="L1 Windows", ncols=80)
+        for wnd in bar_wnd:
+            w_start = wnd * chunk_len_l1
+            w_end = min((wnd + 1) * chunk_len_l1, duration)
             
             # 找到落在该窗口内的所有 L2 片段
             # 判定标准：L2 的中心点落在 L1 窗口内
@@ -170,14 +173,14 @@ class AudioProcessor:
                 confidence=1.0 # 聚合层级暂定为1
             ))
             
+            bar_wnd.set_postfix({"start_sec": f"{w_start:.1f}", "end_sec": f"{w_end:.1f}", "tags": ",".join(unique_tags)})
+            
         return {"L1": l1_units, "L2": l2_units}
 
 if __name__ == "__main__":
     files = os.listdir("data/raw")
-    for file in files:
-        if not (file.endswith(".wav") or file.endswith(".mp3")):
-            continue
-            
+    file = np.random.choice(files)
+    try:
         test_file = os.path.join("data/raw", file)
         print(f"\nProcessing file: {test_file}")
         processor = AudioProcessor(whisper_size="tiny")
@@ -189,14 +192,16 @@ if __name__ == "__main__":
         
         if result['L2']:
             print("\n--- Sample L2 Unit (Fine-grained) ---")
-            u = result['L2'][0]
+            u = np.random.choice(result['L2'])
             print(f"Time: {u.start_time:.1f} - {u.end_time:.1f}s")
             print(f"Text: {u.transcript}")
             print(f"Tags: {u.audio_tags}")
             
         if result['L1']:
             print("\n--- Sample L1 Unit (Coarse Summary) ---")
-            u = result['L1'][0]
+            u = np.random.choice(result['L1'])
             print(f"Time: {u.start_time:.1f} - {u.end_time:.1f}s")
             print(f"Summary: {u.transcript}")
             print(f"Aggregated Tags: {u.audio_tags}")
+    except Exception as e:
+        print(f"Error processing file {file}: {e}")
