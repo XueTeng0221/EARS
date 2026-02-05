@@ -8,7 +8,7 @@ import re
 from chromadb.utils import embedding_functions
 from typing import List, Tuple, Dict
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
-from dataset import EvidenceUnit
+from processor import EvidenceUnit
 
 class LocalLLM:
     r"""

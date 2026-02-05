@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from typing import List, Dict, Tuple
 from pipeline import EARSPipeline
-from dataset import AudioProcessor
+from processor import AudioProcessor
 from models import LocalLLM, extract_json
 
 """
