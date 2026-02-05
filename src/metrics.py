@@ -215,11 +215,11 @@ if __name__ == "__main__":
     test_set_example = [
         {
             "query": "Was there any angry speech during the meeting?",
-            "audio_file": "longbeach_573ff981-3616-47be-8547-eb1609ae8346.mp3",
+            "audio_file": "35282289930-1-192.mp4",
             "ground_truth_segments": [
                 {"start": 900.0, "end": 3600.0, "tags": ["angry speech"]}
             ],
-            "expected_answer": "Yes, there was frustration expressed around the 15-minute mark."
+            "expected_answer": "No, there was no angry speech during the meeting."
         }
     ]
     

@@ -11,4 +11,5 @@ data/raw/
 *.zip
 *.mp3
 *.wav
+data/*.json
 Qwen2.5-7B-Instruct/

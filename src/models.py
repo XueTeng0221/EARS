@@ -18,10 +18,11 @@ class LocalLLM:
     _instance = None
     
     @classmethod
-    def get_instance(cls, model_path="./local-qwen"):
+    def get_instance(cls, model_path="Qwen/Qwen2.5-3B-Instruct"):
         if cls._instance is None:
             print(f"Loading Local LLM: {model_path} ...")
             cls._instance = cls(model_path)
+            
         return cls._instance
 
     def __init__(self, model_path):
