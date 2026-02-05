@@ -1,12 +1,13 @@
 # models.py
 
 import json
+import os
 import torch
 import chromadb
 import re
 from chromadb.utils import embedding_functions
 from typing import List, Tuple, Dict
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from dataset import EvidenceUnit
 
 class LocalLLM:
@@ -60,6 +61,71 @@ class LocalLLM:
         ]
         response = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
         return response
+
+
+class LocalVLM:
+    """本地多模态模型封装（可选）。
+
+    仅在提供 frame_path 时启用；加载失败会在上层回退到文本 LLM。
+    """
+
+    _instance = None
+
+    @classmethod
+    def get_instance(cls, model_path: str):
+        if cls._instance is None or getattr(cls._instance, "model_path", None) != model_path:
+            print(f"Loading Local VLM: {model_path} ...")
+            cls._instance = cls(model_path)
+        return cls._instance
+
+    def __init__(self, model_path: str):
+        self.model_path = model_path
+        self.device_id = 0 if torch.cuda.is_available() else -1
+
+        # 采用 pipeline 以适配不同 VLM（Qwen-VL/InternVL 等）。
+        # 注：如果模型需要 trust_remote_code，可通过环境变量开启。
+        trust_remote_code = os.getenv("EARS_TRUST_REMOTE_CODE", "0") == "1"
+        self.pipe = pipeline(
+            task="image-text-to-text",
+            model=model_path,
+            device=self.device_id,
+            trust_remote_code=trust_remote_code,
+        )
+
+    def generate(self, prompt: str, frame_path: str) -> str:
+        try:
+            from PIL import Image
+        except Exception as e:
+            raise RuntimeError(f"PIL/Pillow is required for VLM image input: {e}")
+
+        image = Image.open(frame_path).convert("RGB")
+
+        # 不同 transformers 版本/不同 pipeline 的调用签名略有差异，这里做兼容尝试。
+        last_err = None
+        for attempt in range(3):
+            try:
+                if attempt == 0:
+                    out = self.pipe(image, prompt=prompt, max_new_tokens=512)
+                elif attempt == 1:
+                    out = self.pipe({"image": image, "text": prompt}, max_new_tokens=512)
+                else:
+                    out = self.pipe(image, prompt, max_new_tokens=512)
+                break
+            except Exception as e:
+                last_err = e
+                out = None
+
+        if out is None:
+            raise RuntimeError(f"VLM pipeline call failed: {last_err}")
+
+        if isinstance(out, list) and out:
+            item = out[0]
+            if isinstance(item, dict):
+                return item.get("generated_text") or item.get("text") or json.dumps(item, ensure_ascii=False)
+            return str(item)
+        if isinstance(out, dict):
+            return out.get("generated_text") or out.get("text") or json.dumps(out, ensure_ascii=False)
+        return str(out)
 
 # 辅助函数：清洗 JSON
 def extract_json(text: str) -> Dict:
@@ -256,19 +322,29 @@ Output JSON:
         res = extract_json(response_text)
         return res.get('is_sufficient', False), res.get('reason', 'Unknown reason')
 
-def generate_final_answer(query: str, evidence: dict) -> str:
+def generate_final_answer(query: str, evidence: dict, frame_path: str | None = None) -> str:
     r"""
     生成最终回答的辅助函数
     """
-    llm = LocalLLM.get_instance()
-    system_prompt = "You are a helpful assistant. Answer the user question based on the provided audio evidence."
-    prompt = f"""Question: {query}
+    system_prompt = "You are a helpful assistant. Answer the user question based on the provided evidence."
+    base_prompt = f"""Question: {query}
 
-Evidence:
+Evidence (Audio):
 - Text: "{evidence['transcript']}"
 - Context/Tone: {evidence['tags']}
 - Time: {evidence['timestamp']}
-
-Please answer concisely.
 """
+
+    # 有视频帧时：优先走多模态；失败则回退到文本
+    if frame_path:
+        vlm_path = os.getenv("EARS_VLM_PATH", "./local-qwen-vl")
+        try:
+            vlm = LocalVLM.get_instance(vlm_path)
+            mm_prompt = base_prompt + "\nEvidence (Video Frame): Use the image to verify/clarify the audio evidence.\n"
+            return vlm.generate(mm_prompt, frame_path)
+        except Exception as e:
+            print(f"[WARN] VLM unavailable, falling back to text-only LLM: {e}")
+
+    llm = LocalLLM.get_instance()
+    prompt = base_prompt + "\nPlease answer concisely.\n"
     return llm.generate(prompt, system_prompt)

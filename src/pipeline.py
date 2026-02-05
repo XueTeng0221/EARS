@@ -2,6 +2,7 @@
 
 from termcolor import colored
 from models import QueryPlanner, MultiScaleRetriever, EvidenceReranker, Verifier, generate_final_answer
+from videotools import export_video_frame
 
 class EARSPipeline:
     def __init__(self, dataset):
@@ -40,8 +41,16 @@ class EARSPipeline:
             if is_sufficient:
                 # 5. Generate Answer
                 print("Generating final answer with Qwen...")
-                answer = generate_final_answer(user_query, top_evidence[0])
-                
+                frame_path = None
+                raw_unit = top_evidence[0].get("raw_unit")
+                try:
+                    if raw_unit is not None and getattr(raw_unit, "video_path", None):
+                        ts = float((raw_unit.start_time + raw_unit.end_time) / 2)
+                        frame_path = export_video_frame(raw_unit.video_path, ts, prefix="evidence_center")
+                except Exception as e:
+                    print(colored(f"[WARN] Failed to export frame: {e}", "yellow"))
+
+                answer = generate_final_answer(user_query, top_evidence[0], frame_path=frame_path)
                 return {
                     "status": "success",
                     "answer": answer,
@@ -50,7 +59,6 @@ class EARSPipeline:
             else:
                 # 6. Refine (Self-Correction)
                 print(colored(f"Verification Failed: {reason}", 'yellow'))
-                # 简单策略：如果失败，提示 Agent 尝试更泛化的搜索
                 current_query = current_query + " (look for broader context)" 
                 
         return {"status": "fail", "answer": "Unable to find sufficient evidence."}

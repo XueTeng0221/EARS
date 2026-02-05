@@ -6,7 +6,8 @@ __pycache__/
 .idea/
 .vscode/
 *.log
-data/
+data/processed/
+data/raw/
 *.zip
 *.mp3
 *.wav

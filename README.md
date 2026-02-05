@@ -1,6 +1,8 @@
 # EARS
 ## EARS (Evidence-Aware Reasoning System) —— 基于 MLLM 的可信音频推理与检索框架
 
+欢迎 Star/Issue 谢谢喵~
+
 ## 1. 核心理念与架构概览
 本项目旨在构建一个**闭环的音频推理系统**。我们将检索器（Retriever）从一个静态的查表工具，升级为一个**动态的代理（Agent）**。系统不仅要“听见”音频，还要“理解”音频作为证据的效力。
 
